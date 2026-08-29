@@ -1,51 +1,45 @@
 # InterviewDrill
 
-Self-hosted machine-coding and LLD interview practice platform using an Express microservices backend and a separate React/Tailwind SPA.
+Self-hosted machine-coding and LLD interview practice platform with an Express microservices backend and React/Tailwind SPA.
 
-## Implemented phases
+## Implemented through Phase 3
 
-### Phase 0
-- API Gateway
-- Content Service
-- Session Service
-- isolated Content and Session Postgres databases
-- seeded snippet drill
-- end-to-end start/type/submit flow
+### Core services
+- Gateway — auth stub, rate limiting, routing only
+- Content Service — projects, files, folder nodes, LLD classes
+- Session Service — session lifecycle and content snapshot
+- Evaluation Service — Levenshtein accuracy, completion, structure, mistake tags
+- Progress Service — rolling stats, WPM, historical events, mistake patterns
+- Admin Service — manual content creation and ZIP project import
 
-### Phase 1
-- Redis Streams
-- Evaluation Service + isolated Evaluation Postgres
-- `session.submitted` → async evaluation → `evaluation.completed`
-- Levenshtein character accuracy
-- completion and path-structure scoring
-- mistake tags
-- beginner/intermediate machine-coding projects
-- async report polling through Gateway
+### Async pipeline
+`session.submitted` → Evaluation Service → `evaluation.completed` → Progress Service
 
-### Phase 2
-- `LldClass` migration and CRUD API
-- generic class/file session units
-- Parking Lot, LRU Cache, Rate Limiter, Elevator System seeds
-- C++ class-by-class typing
-- pre-session problem statement + class-plan view
-- pattern tags and pattern-aware evaluation summary
+Redis Streams is used for async reactions. No service directly reads another service's database.
 
-## Service ports
+### Local ports
+- Gateway: 4000
+- Content: 4001
+- Session: 4002
+- Evaluation: 4003
+- Progress: 4004
+- Admin: 4005
+- Frontend: 5173
+- Content Postgres: 5433
+- Session Postgres: 5434
+- Evaluation Postgres: 5435
+- Progress Postgres: 5436
+- Redis: 6379
 
-- Gateway: http://localhost:4000
-- Content Service: http://localhost:4001
-- Session Service: http://localhost:4002
-- Evaluation Service: http://localhost:4003
-- Frontend: http://localhost:5173
-
-## Infrastructure
-
-- Content Postgres: localhost:5433
-- Session Postgres: localhost:5434
-- Evaluation Postgres: localhost:5435
-- Redis: localhost:6379
-
-The architectural boundary is strict: no service queries another service's database. Cross-service reads use REST and async reactions use Redis Streams.
+## Phase 3 UI
+- progress dashboard
+- per-category average accuracy / WPM / session count
+- recent accuracy trend
+- mistake-pattern log
+- focus-content shortlist
+- Admin PIN gate
+- manual project/snippet/LLD creation
+- ZIP upload with path preservation and simple auto-tagging
 
 ## Run
 
@@ -55,9 +49,10 @@ docker compose up --build
 
 Open http://localhost:5173.
 
-The development Gateway token is `dev-token`, sent automatically by the SPA.
+Development auth token: `dev-token`.
+Default local Admin PIN: `2468` (override with `ADMIN_PIN`).
 
-## Reset all local data
+## Reset local state
 
 ```bash
 docker compose down -v

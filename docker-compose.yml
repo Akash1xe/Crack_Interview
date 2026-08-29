@@ -41,6 +41,20 @@ services:
       timeout: 5s
       retries: 10
 
+  progress-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: interviewdrill
+      POSTGRES_PASSWORD: interviewdrill
+      POSTGRES_DB: progress_db
+    ports: ["5436:5432"]
+    volumes: [progress_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interviewdrill -d progress_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
@@ -90,6 +104,34 @@ services:
       redis:
         condition: service_started
 
+  progress-service:
+    build: ./services/progress-service
+    environment:
+      PORT: 4004
+      DATABASE_URL: postgres://interviewdrill:interviewdrill@progress-db:5432/progress_db
+      REDIS_URL: redis://redis:6379
+      SESSION_SERVICE_URL: http://session-service:4002
+      EVALUATION_SERVICE_URL: http://evaluation-service:4003
+    ports: ["4004:4004"]
+    depends_on:
+      progress-db:
+        condition: service_healthy
+      evaluation-service:
+        condition: service_started
+      redis:
+        condition: service_started
+
+  admin-service:
+    build: ./services/admin-service
+    environment:
+      PORT: 4005
+      CONTENT_SERVICE_URL: http://content-service:4001
+      ADMIN_PIN: ${ADMIN_PIN:-2468}
+    ports: ["4005:4005"]
+    depends_on:
+      content-service:
+        condition: service_started
+
   gateway:
     build: ./services/gateway
     environment:
@@ -98,8 +140,10 @@ services:
       CONTENT_SERVICE_URL: http://content-service:4001
       SESSION_SERVICE_URL: http://session-service:4002
       EVALUATION_SERVICE_URL: http://evaluation-service:4003
+      PROGRESS_SERVICE_URL: http://progress-service:4004
+      ADMIN_SERVICE_URL: http://admin-service:4005
     ports: ["4000:4000"]
-    depends_on: [content-service, session-service, evaluation-service]
+    depends_on: [content-service, session-service, evaluation-service, progress-service, admin-service]
 
   frontend:
     build: ./frontend
@@ -112,3 +156,4 @@ volumes:
   content_pg:
   session_pg:
   evaluation_pg:
+  progress_pg:
