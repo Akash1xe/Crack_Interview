@@ -2,22 +2,46 @@
 
 Self-hosted machine-coding and LLD interview practice platform with an Express microservices backend and React/Tailwind SPA.
 
-## Implemented through Phase 3
+## Architecture
 
-### Core services
-- Gateway — auth stub, rate limiting, routing only
-- Content Service — projects, files, folder nodes, LLD classes
-- Session Service — session lifecycle and content snapshot
-- Evaluation Service — Levenshtein accuracy, completion, structure, mistake tags
-- Progress Service — rolling stats, WPM, historical events, mistake patterns
-- Admin Service — manual content creation and ZIP project import
+The frontend talks only to the API Gateway. Every stateful service owns its own Postgres database. No service queries another service's database. Cross-service reads use REST and async reactions use Redis Streams.
 
-### Async pipeline
-`session.submitted` → Evaluation Service → `evaluation.completed` → Progress Service
+Services:
+- Gateway — authentication, JWT verification, rate limiting, routing
+- Content Service — projects, files, folder trees, LLD classes
+- Session Service — session lifecycle, timer state, recall settings, reference snapshot
+- Evaluation Service — Levenshtein accuracy, completion, structure scoring, mistake classification
+- Progress Service — rolling WPM/accuracy, dashboard history, mistake patterns
+- Admin Service — manual creation and ZIP import through Content Service REST
 
-Redis Streams is used for async reactions. No service directly reads another service's database.
+Async pipeline:
 
-### Local ports
+`session.submitted → Evaluation Service → evaluation.completed → Progress Service`
+
+## Features implemented
+
+- Snippet Drills
+- Machine Coding Rounds
+- LLD Practice in C++
+- Admin manual entry
+- ZIP project import
+- countdown sessions
+- async evaluation reports
+- character-level Levenshtein accuracy
+- structure and completion scoring
+- rolling WPM/accuracy
+- mistake pattern logging
+- Focus Drill recommendations
+- Recall mode with configurable 5–60 second preview
+- JWT access tokens (15 minutes)
+- HTTP-only refresh cookie (7 days)
+- automatic frontend token refresh
+- Gateway and session rate limiting
+- incremental Postgres migrations
+- unit tests for JWT token type handling and diff/scoring logic
+
+## Local ports
+
 - Gateway: 4000
 - Content: 4001
 - Session: 4002
@@ -31,15 +55,25 @@ Redis Streams is used for async reactions. No service directly reads another ser
 - Progress Postgres: 5436
 - Redis: 6379
 
-## Phase 3 UI
-- progress dashboard
-- per-category average accuracy / WPM / session count
-- recent accuracy trend
-- mistake-pattern log
-- focus-content shortlist
-- Admin PIN gate
-- manual project/snippet/LLD creation
-- ZIP upload with path preservation and simple auto-tagging
+## Configure
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Change at least:
+- `AUTH_PASSWORD`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `ADMIN_PIN`
 
 ## Run
 
@@ -47,14 +81,33 @@ Redis Streams is used for async reactions. No service directly reads another ser
 docker compose up --build
 ```
 
-Open http://localhost:5173.
+Open http://localhost:5173 and sign in with `AUTH_USERNAME` / `AUTH_PASSWORD`.
 
-Development auth token: `dev-token`.
-Default local Admin PIN: `2468` (override with `ADMIN_PIN`).
+## Tests
 
-## Reset local state
+Gateway auth tests:
+
+```bash
+cd services/gateway
+npm install
+npm test
+```
+
+Evaluation scoring tests:
+
+```bash
+cd services/evaluation-service
+npm install
+npm test
+```
+
+## Reset all local state
 
 ```bash
 docker compose down -v
 docker compose up --build
 ```
+
+## Current status
+
+Master build phases 0 through 4 are implemented. Runtime/container verification should still be performed on a machine with Docker and internet access for initial image/package downloads.

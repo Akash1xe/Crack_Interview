@@ -136,7 +136,11 @@ services:
     build: ./services/gateway
     environment:
       PORT: 4000
-      DEV_TOKEN: dev-token
+      AUTH_USERNAME: ${AUTH_USERNAME:-akash}
+      AUTH_PASSWORD: ${AUTH_PASSWORD:-interviewdrill}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-access-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-refresh-secret-change-me}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       CONTENT_SERVICE_URL: http://content-service:4001
       SESSION_SERVICE_URL: http://session-service:4002
       EVALUATION_SERVICE_URL: http://evaluation-service:4003

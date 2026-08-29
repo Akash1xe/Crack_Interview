@@ -24,9 +24,19 @@ app.get('/health',(_req,res)=>ok(res,{service:'session-service',ok:true}));
 
 app.post('/sessions',async(req,res,next)=>{
   try{
-    const userId=req.headers['x-user-id']||'dev-user';
-    const {project_id,time_limit_seconds}=req.body;
-    if(!project_id||!time_limit_seconds)return fail(res,400,'project_id and time_limit_seconds are required');
+    const userId=req.headers['x-user-id'];
+    if(!userId)return fail(res,401,'Missing user identity');
+    const {
+      project_id,
+      time_limit_seconds,
+      recall=false,
+      recall_preview_seconds=10
+    }=req.body;
+
+    if(!project_id||!Number.isFinite(Number(time_limit_seconds))||Number(time_limit_seconds)<=0){
+      return fail(res,400,'project_id and a positive time_limit_seconds are required');
+    }
+    const preview=Math.min(60,Math.max(5,Number(recall_preview_seconds)||10));
 
     const contentResponse=await fetch(`${contentUrl}/projects/${project_id}`);
     if(!contentResponse.ok)return fail(res,404,'Project not found in Content Service');
@@ -34,16 +44,12 @@ app.post('/sessions',async(req,res,next)=>{
 
     const units=project.category==='lld'
       ? project.lld_classes.map(c=>({
-          id:c.id,
-          path:c.name,
-          name:c.name,
-          reference_code:c.reference_code,
-          language:'cpp',
-          order_index:c.order_index,
-          pattern_tag:c.pattern_tag,
-          unit_type:'class'
+          id:c.id,path:c.name,name:c.name,reference_code:c.reference_code,language:'cpp',
+          order_index:c.order_index,pattern_tag:c.pattern_tag,unit_type:'class'
         }))
       : project.files.map(f=>({...f,unit_type:'file'}));
+
+    if(!units.length)return fail(res,400,'Project has no typeable units');
 
     const snapshot={
       project_id:project.id,
@@ -58,9 +64,9 @@ app.post('/sessions',async(req,res,next)=>{
     try{
       await client.query('BEGIN');
       const created=await client.query(
-        `INSERT INTO sessions(user_id,project_id,category,time_limit_seconds,reference_snapshot)
-         VALUES($1,$2,$3,$4,$5::jsonb) RETURNING *`,
-        [userId,project.id,project.category,time_limit_seconds,JSON.stringify(snapshot)]
+        `INSERT INTO sessions(user_id,project_id,category,time_limit_seconds,reference_snapshot,recall,recall_preview_seconds)
+         VALUES($1,$2,$3,$4,$5::jsonb,$6,$7) RETURNING *`,
+        [userId,project.id,project.category,Number(time_limit_seconds),JSON.stringify(snapshot),Boolean(recall),preview]
       );
       const session=created.rows[0];
       for(const unit of units){
@@ -99,7 +105,8 @@ app.patch('/sessions/:id/files/:fileId',async(req,res,next)=>{
   try{
     const {typed_code='',typed_path=''}=req.body;
     const result=await pool.query(
-      'UPDATE session_files SET typed_code=$1,typed_path=$2 WHERE session_id=$3 AND file_id_ref=$4 RETURNING *',
+      `UPDATE session_files SET typed_code=$1,typed_path=$2
+       WHERE session_id=$3 AND file_id_ref=$4 RETURNING *`,
       [typed_code,typed_path,req.params.id,req.params.fileId]
     );
     if(!result.rowCount)return fail(res,404,'Session unit not found');

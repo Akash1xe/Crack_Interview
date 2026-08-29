@@ -1,5 +1,5 @@
 import { useEffect,useMemo,useState } from 'react';
-import { api } from './api.js';
+import { api,bootstrapAuth,login,logout } from './api.js';
 
 function formatTime(total){
   const seconds=Math.max(0,total);
@@ -7,6 +7,32 @@ function formatTime(total){
 }
 
 const modeTitle={snippet:'Snippet Drills',machine_coding:'Machine Coding',lld:'LLD Practice'};
+
+function Login({onLoggedIn}){
+  const[username,setUsername]=useState('akash');
+  const[password,setPassword]=useState('');
+  const[error,setError]=useState('');
+
+  async function submit(event){
+    event.preventDefault();
+    try{
+      const user=await login(username,password);
+      onLoggedIn(user);
+    }catch(err){setError(err.message);}
+  }
+
+  return <main className="mx-auto flex min-h-screen max-w-md items-center p-6">
+    <form className="card w-full" onSubmit={submit}>
+      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Self-hosted</p>
+      <h1 className="mt-2 text-3xl font-black">InterviewDrill</h1>
+      <p className="mt-2 text-sm text-zinc-400">Sign in with the credentials configured on your Gateway.</p>
+      <input className="mt-5 w-full rounded-xl bg-zinc-950 p-3" value={username} onChange={e=>setUsername(e.target.value)} placeholder="Username"/>
+      <input className="mt-3 w-full rounded-xl bg-zinc-950 p-3" type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password"/>
+      <button className="btn mt-4 w-full" type="submit">Sign in</button>
+      {error&&<p className="mt-3 text-sm text-red-300">{error}</p>}
+    </form>
+  </main>;
+}
 
 function Dashboard({onPractice}){
   const[data,setData]=useState({stats:[],mistakes:[],events:[]});
@@ -77,7 +103,7 @@ function Dashboard({onPractice}){
           <div className="text-xs text-zinc-500">{project.category}</div>
           <div className="mt-1 font-bold">{project.title}</div>
           <div className="mt-2 text-xs text-zinc-500">{(project.tags||[]).join(' · ')}</div>
-        </button>):<p className="text-sm text-zinc-500">No matching focus content yet; more content can be imported from Admin.</p>}
+        </button>):<p className="text-sm text-zinc-500">No matching focus content yet.</p>}
       </div>
     </div>
     {message&&<div className="card mt-5">{message}</div>}
@@ -95,27 +121,19 @@ function Admin(){
   const[zip,setZip]=useState(null);
 
   async function verify(){
-    try{
-      await api('/admin/verify',{method:'POST',headers:{'x-admin-pin':pin}});
-      setVerified(true);setMessage('');
-    }catch(error){setMessage(error.message);}
+    try{await api('/admin/verify',{method:'POST',headers:{'x-admin-pin':pin}});setVerified(true);setMessage('');}
+    catch(error){setMessage(error.message);}
   }
 
   async function createManual(){
     try{
+      if(!form.title.trim()||!form.reference_code.trim())throw new Error('Title and reference code are required');
       const payload={
-        title:form.title,
-        description:form.description,
-        category:form.category,
-        difficulty:form.difficulty,
+        title:form.title,description:form.description,category:form.category,difficulty:form.difficulty,
         estimated_minutes:Number(form.estimated_minutes),
         tags:form.tags.split(',').map(x=>x.trim()).filter(Boolean),
-        files:form.category==='lld'?[]:[{
-          path:form.path,language:form.language,reference_code:form.reference_code,order_index:1
-        }],
-        lld_classes:form.category==='lld'?[{
-          name:form.path||'ClassName',reference_code:form.reference_code,pattern_tag:form.tags.split(',')[0]||'none',order_index:1
-        }]:[]
+        files:form.category==='lld'?[]:[{path:form.path,language:form.language,reference_code:form.reference_code,order_index:1}],
+        lld_classes:form.category==='lld'?[{name:form.path||'ClassName',reference_code:form.reference_code,pattern_tag:form.tags.split(',')[0]||'none',order_index:1}]:[]
       };
       const result=await api('/admin/projects',{method:'POST',headers:{'x-admin-pin':pin},body:JSON.stringify(payload)});
       setMessage('Created: '+result.title);
@@ -149,14 +167,13 @@ function Admin(){
 
   return <section>
     <h1 className="text-4xl font-black">Content Admin</h1>
-    <p className="mt-2 text-zinc-400">Create content manually or import an existing project ZIP. Admin Service writes through Content Service only.</p>
-
+    <p className="mt-2 text-zinc-400">Create content manually or import an existing project ZIP.</p>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
       <div className="card">
         <h2 className="text-lg font-bold">Manual entry</h2>
         <div className="mt-4 grid gap-3">
           <input className="rounded-xl bg-zinc-950 p-3" placeholder="Title" value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/>
-          <textarea className="rounded-xl bg-zinc-950 p-3" placeholder="Problem/project description" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
+          <textarea className="rounded-xl bg-zinc-950 p-3" placeholder="Description" value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/>
           <div className="grid grid-cols-2 gap-3">
             <select className="rounded-xl bg-zinc-950 p-3" value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>
               <option value="snippet">Snippet</option><option value="machine_coding">Machine Coding</option><option value="lld">LLD</option>
@@ -175,10 +192,9 @@ function Admin(){
           <button className="btn" onClick={createManual}>Create content</button>
         </div>
       </div>
-
       <div className="card h-fit">
         <h2 className="text-lg font-bold">ZIP import</h2>
-        <p className="mt-2 text-sm text-zinc-500">Imports files, preserves paths, and derives basic layer/language tags automatically.</p>
+        <p className="mt-2 text-sm text-zinc-500">Imports files, preserves paths, and derives basic tags.</p>
         <input className="mt-4 block w-full text-sm" type="file" accept=".zip,application/zip" onChange={e=>setZip(e.target.files?.[0]||null)}/>
         <button className="btn mt-4" onClick={uploadZip}>Import ZIP</button>
       </div>
@@ -200,9 +216,12 @@ function Practice({initialMode='snippet'}){
   const[message,setMessage]=useState('');
   const[submitted,setSubmitted]=useState(false);
   const[report,setReport]=useState(null);
+  const[recall,setRecall]=useState(false);
+  const[previewSeconds,setPreviewSeconds]=useState(10);
+  const[referenceHidden,setReferenceHidden]=useState(false);
 
   useEffect(()=>{
-    setPreview(null);setProject(null);setSession(null);setReport(null);
+    setPreview(null);setProject(null);setSession(null);setReport(null);setReferenceHidden(false);
     api('/content/projects?category='+mode).then(setProjects).catch(error=>setMessage(error.message));
   },[mode]);
 
@@ -211,8 +230,13 @@ function Practice({initialMode='snippet'}){
     const tick=()=>{
       const started=new Date(session.started_at).getTime();
       setLeft(Math.max(0,session.time_limit_seconds-Math.floor((Date.now()-started)/1000)));
+      if(session.recall){
+        setReferenceHidden(Date.now()-started>=session.recall_preview_seconds*1000);
+      }
     };
-    tick();const id=setInterval(tick,500);return()=>clearInterval(id);
+    tick();
+    const id=setInterval(tick,500);
+    return()=>clearInterval(id);
   },[session]);
 
   const units=session?.reference_snapshot?.units||session?.reference_snapshot?.files||[];
@@ -227,8 +251,13 @@ function Practice({initialMode='snippet'}){
 
   async function start(full){
     try{
-      setProject(full);setPreview(null);setMessage('');
-      const created=await api('/sessions',{method:'POST',body:JSON.stringify({project_id:full.id,time_limit_seconds:full.estimated_minutes*60})});
+      setProject(full);setPreview(null);setMessage('');setReferenceHidden(false);
+      const created=await api('/sessions',{method:'POST',body:JSON.stringify({
+        project_id:full.id,
+        time_limit_seconds:full.estimated_minutes*60,
+        recall,
+        recall_preview_seconds:previewSeconds
+      })});
       const createdUnits=created.reference_snapshot.units||created.reference_snapshot.files||[];
       setSession(created);setLeft(created.time_limit_seconds);setTyped({});
       setPaths(Object.fromEntries(createdUnits.map(unit=>[unit.id,mode==='machine_coding'?'':(unit.path||unit.name||'')])));
@@ -255,10 +284,22 @@ function Practice({initialMode='snippet'}){
 
   useEffect(()=>{if(left===0&&session?.status==='in_progress'&&!submitted)submit();},[left,session?.status,submitted]);
 
+  const setupControls=<div className="card mt-5 flex flex-wrap items-center gap-5">
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={recall} onChange={e=>setRecall(e.target.checked)}/>
+      Recall mode
+    </label>
+    {recall&&<label className="text-sm">Preview
+      <input className="ml-3 w-20 rounded-lg bg-zinc-950 p-2" type="number" min="5" max="60" value={previewSeconds} onChange={e=>setPreviewSeconds(Math.min(60,Math.max(5,Number(e.target.value)||10)))}/>
+      <span className="ml-2 text-zinc-500">seconds</span>
+    </label>}
+  </div>;
+
   if(preview&&mode==='lld')return <section>
     <button className="mb-5 text-sm text-zinc-400" onClick={()=>setPreview(null)}>← Back</button>
     <div className="card"><h1 className="text-4xl font-black">{preview.title}</h1><p className="mt-4 text-zinc-300">{preview.description}</p></div>
     <div className="mt-5 grid gap-3 md:grid-cols-2">{preview.lld_classes.map(c=><div className="card" key={c.id}><div className="text-xs uppercase text-zinc-500">{c.pattern_tag}</div><b className="mt-2 block text-xl">{c.name}</b></div>)}</div>
+    {setupControls}
     <button className="btn mt-5" onClick={()=>start(preview)}>Start timed session</button>
   </section>;
 
@@ -279,17 +320,25 @@ function Practice({initialMode='snippet'}){
 
   return <section>
     <div className="flex flex-wrap gap-2">{Object.entries(modeTitle).map(([key,label])=><button key={key} className={`rounded-xl px-4 py-2 ${mode===key?'bg-white text-black':'border border-zinc-700'}`} onClick={()=>setMode(key)}>{label}</button>)}</div>
-    {!session&&<div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{projects.map(item=><article className="card" key={item.id}><div className="text-xs text-zinc-500">{item.difficulty} · {item.estimated_minutes} min</div><h3 className="mt-2 text-xl font-bold">{item.title}</h3><p className="mt-2 text-sm text-zinc-400">{item.description}</p><button className="btn mt-4" onClick={()=>openProject(item)}>{mode==='lld'?'View problem':'Start'}</button></article>)}</div>}
+
+    {!session&&<>
+      {setupControls}
+      <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">{projects.map(item=><article className="card" key={item.id}><div className="text-xs text-zinc-500">{item.difficulty} · {item.estimated_minutes} min</div><h3 className="mt-2 text-xl font-bold">{item.title}</h3><p className="mt-2 text-sm text-zinc-400">{item.description}</p><button className="btn mt-4" onClick={()=>openProject(item)}>{mode==='lld'?'View problem':'Start'}</button></article>)}</div>
+    </>}
 
     {session&&active&&<div className="mt-6">
+      {session.recall&&<div className="card mb-4 text-sm">
+        <b>Recall mode</b>
+        <span className="ml-2 text-zinc-400">{referenceHidden?'Reference hidden — continue from memory.':`Memorize now. Hides after ${session.recall_preview_seconds}s.`}</span>
+      </div>}
       {mode==='machine_coding'&&<div className="card mb-4"><b>Target structure</b><pre className="mt-3 text-sm text-zinc-400">{project?.files?.map(f=>f.path).join('\n')}</pre></div>}
       <div className="mb-4 flex justify-between"><div><div className="text-sm text-zinc-500">{active.pattern_tag||project?.title}</div><h2 className="text-xl font-bold">{active.name||active.path}</h2></div><div className="rounded-xl border border-zinc-800 px-4 py-2 font-mono text-xl">{formatTime(left)}</div></div>
       <div className="grid gap-4 lg:grid-cols-[250px_1fr]">
         <aside className="card h-fit">{units.map(unit=><button className="mb-2 block w-full rounded-lg bg-zinc-950 p-2 text-left text-xs" key={unit.id} onClick={()=>setActiveId(unit.id)}>{unit.name||unit.path}</button>)}</aside>
         <div>
           {mode==='machine_coding'&&<input className="mb-3 w-full rounded-xl bg-zinc-950 p-3 font-mono text-sm" placeholder="Type file path from memory" value={paths[active.id]||''} onChange={e=>setPaths({...paths,[active.id]:e.target.value})}/>}
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="card"><div className="mb-2 text-sm text-zinc-500">Reference</div><pre className="max-h-[560px] overflow-auto whitespace-pre-wrap font-mono text-xs">{active.reference_code}</pre></div>
+          <div className={referenceHidden?'grid gap-4':'grid gap-4 xl:grid-cols-2'}>
+            {!referenceHidden&&<div className="card"><div className="mb-2 text-sm text-zinc-500">Reference</div><pre className="max-h-[560px] overflow-auto whitespace-pre-wrap font-mono text-xs">{active.reference_code}</pre></div>}
             <div className="card"><div className="mb-2 text-sm text-zinc-500">Your code</div><textarea className="min-h-[560px] w-full bg-zinc-950 p-3 font-mono text-xs" value={typed[active.id]||''} onChange={e=>setTyped({...typed,[active.id]:e.target.value})} disabled={submitted}/></div>
           </div>
         </div>
@@ -301,17 +350,34 @@ function Practice({initialMode='snippet'}){
 }
 
 export default function App(){
+  const[authReady,setAuthReady]=useState(false);
+  const[user,setUser]=useState(null);
   const[page,setPage]=useState('dashboard');
   const[practiceMode,setPracticeMode]=useState('snippet');
 
+  useEffect(()=>{
+    bootstrapAuth().then(ok=>{setAuthReady(true);if(ok)setUser({username:'session'});});
+  },[]);
+
+  async function signOut(){
+    await logout();
+    setUser(null);
+  }
+
   function goPractice(mode='snippet'){setPracticeMode(mode);setPage('practice');}
+
+  if(!authReady)return <main className="p-6 text-zinc-400">Loading InterviewDrill…</main>;
+  if(!user)return <Login onLoggedIn={setUser}/>;
 
   return <main className="mx-auto max-w-7xl p-6">
     <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-      <div><p className="text-sm uppercase tracking-[0.2em] text-zinc-500">Phase 3</p><h1 className="mt-1 text-3xl font-black">InterviewDrill</h1></div>
-      <nav className="flex gap-2">
-        {['dashboard','practice','admin'].map(item=><button key={item} onClick={()=>setPage(item)} className={`rounded-xl px-4 py-2 capitalize ${page===item?'bg-white text-black':'border border-zinc-700'}`}>{item}</button>)}
-      </nav>
+      <div><p className="text-sm uppercase tracking-[0.2em] text-zinc-500">Interview practice platform</p><h1 className="mt-1 text-3xl font-black">InterviewDrill</h1></div>
+      <div className="flex flex-wrap gap-2">
+        <nav className="flex gap-2">
+          {['dashboard','practice','admin'].map(item=><button key={item} onClick={()=>setPage(item)} className={`rounded-xl px-4 py-2 capitalize ${page===item?'bg-white text-black':'border border-zinc-700'}`}>{item}</button>)}
+        </nav>
+        <button className="rounded-xl border border-zinc-700 px-4 py-2" onClick={signOut}>Logout</button>
+      </div>
     </header>
     {page==='dashboard'&&<Dashboard onPractice={goPractice}/>}
     {page==='practice'&&<Practice key={practiceMode} initialMode={practiceMode}/>}
