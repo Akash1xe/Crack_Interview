@@ -230,7 +230,7 @@ function Practice({initialMode='snippet'}){
       setProject(full);setPreview(null);setMessage('');
       const created=await api('/sessions',{method:'POST',body:JSON.stringify({project_id:full.id,time_limit_seconds:full.estimated_minutes*60})});
       const createdUnits=created.reference_snapshot.units||created.reference_snapshot.files||[];
-      setSession(created);setTyped({});
+      setSession(created);setLeft(created.time_limit_seconds);setTyped({});
       setPaths(Object.fromEntries(createdUnits.map(unit=>[unit.id,mode==='machine_coding'?'':(unit.path||unit.name||'')])));
       setActiveId(createdUnits[0]?.id||null);setSubmitted(false);setReport(null);
     }catch(error){setMessage(error.message);}
