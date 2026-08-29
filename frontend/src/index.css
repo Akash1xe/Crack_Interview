@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+.card { @apply rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5; }
+.btn { @apply rounded-xl bg-white px-4 py-2 font-semibold text-zinc-950 disabled:opacity-50; }
