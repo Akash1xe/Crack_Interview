@@ -10,6 +10,7 @@
   },
   "dependencies":{
     "@monaco-editor/react":"^4.7.0",
+    "@neondatabase/serverless":"^0.10.4",
     "adm-zip":"^0.5.16",
     "jose":"^5.9.6",
     "lucide-react":"^0.468.0",
