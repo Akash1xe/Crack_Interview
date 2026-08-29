@@ -6,10 +6,17 @@ function formatTime(total) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 }
 
+const modeTitle = {
+  snippet: 'Snippet Drills',
+  machine_coding: 'Machine Coding',
+  lld: 'LLD Practice'
+};
+
 export default function App() {
   const [mode, setMode] = useState('snippet');
   const [projects, setProjects] = useState([]);
   const [project, setProject] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [session, setSession] = useState(null);
   const [typed, setTyped] = useState({});
   const [paths, setPaths] = useState({});
@@ -20,6 +27,10 @@ export default function App() {
   const [report, setReport] = useState(null);
 
   useEffect(() => {
+    setPreview(null);
+    setProject(null);
+    setSession(null);
+    setReport(null);
     api('/content/projects?category=' + mode)
       .then(setProjects)
       .catch(error => setMessage(error.message));
@@ -37,26 +48,54 @@ export default function App() {
     return () => clearInterval(id);
   }, [session]);
 
-  const files = session?.reference_snapshot?.files || [];
-  const active = useMemo(() => files.find(file => file.id === activeId) || files[0] || null, [files, activeId]);
+  const units = session?.reference_snapshot?.units || session?.reference_snapshot?.files || [];
+  const active = useMemo(
+    () => units.find(unit => unit.id === activeId) || units[0] || null,
+    [units, activeId]
+  );
 
-  async function start(selected) {
+  async function openProject(selected) {
     try {
       setMessage('');
       const full = await api('/content/projects/' + selected.id);
+      if (mode === 'lld') {
+        setPreview(full);
+      } else {
+        await start(full);
+      }
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function start(full) {
+    try {
+      setMessage('');
       setProject(full);
+      setPreview(null);
       const created = await api('/sessions', {
         method: 'POST',
-        body: JSON.stringify({ project_id: selected.id, time_limit_seconds: selected.estimated_minutes * 60 })
+        body: JSON.stringify({
+          project_id: full.id,
+          time_limit_seconds: full.estimated_minutes * 60
+        })
       });
+
+      const createdUnits = created.reference_snapshot.units || created.reference_snapshot.files || [];
       setSession(created);
-      const initialPaths = Object.fromEntries(created.reference_snapshot.files.map(file => [file.id, mode === 'snippet' ? file.path : '']));
-      setPaths(initialPaths);
       setTyped({});
-      setActiveId(created.reference_snapshot.files[0]?.id || null);
+      setPaths(Object.fromEntries(
+        createdUnits.map(unit => [
+          unit.id,
+          mode === 'machine_coding' ? '' : (unit.path || unit.name || '')
+        ])
+      ));
+      setActiveId(createdUnits[0]?.id || null);
       setSubmitted(false);
       setReport(null);
-    } catch (error) { setMessage(error.message); }
+    } catch (error) {
+      setMessage(error.message);
+    }
   }
 
   async function submit() {
@@ -66,10 +105,10 @@ export default function App() {
       const result = await api('/sessions/' + session.id + '/submit', {
         method: 'POST',
         body: JSON.stringify({
-          files: files.map(file => ({
-            file_id_ref: file.id,
-            typed_code: typed[file.id] || '',
-            typed_path: paths[file.id] || ''
+          files: units.map(unit => ({
+            file_id_ref: unit.id,
+            typed_code: typed[unit.id] || '',
+            typed_path: paths[unit.id] || unit.path || unit.name || ''
           }))
         })
       });
@@ -97,55 +136,126 @@ export default function App() {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
-    setMessage('Evaluation is still processing. Refresh and retry shortly.');
+    setMessage('Evaluation is still processing. Retry shortly.');
   }
 
   useEffect(() => {
     if (left === 0 && session?.status === 'in_progress' && !submitted) submit();
   }, [left, session?.status, submitted]);
 
-  if (report) return <main className="mx-auto max-w-6xl p-6">
-    <h1 className="text-4xl font-black">Evaluation Report</h1>
-    <p className="mt-2 text-zinc-400">{project?.title}</p>
-    <div className="mt-6 grid gap-4 md:grid-cols-4">
-      {[['Accuracy',report.overall_accuracy + '%'],['Completion',report.completion_pct + '%'],['Structure',report.structure_score + '%'],['Time',report.time_used_seconds + 's']].map(([label,value]) =>
-        <div className="card" key={label}><div className="text-xs uppercase text-zinc-500">{label}</div><div className="mt-2 text-3xl font-black">{value}</div></div>
-      )}
-    </div>
-    <div className="card mt-6"><b>Summary</b><p className="mt-2 text-zinc-300">{report.summary_text}</p></div>
-    <div className="card mt-6 overflow-auto">
-      <table className="w-full text-left text-sm">
-        <thead><tr className="text-zinc-500"><th className="p-2">File</th><th>Accuracy</th><th>Path</th><th>Mistakes</th></tr></thead>
-        <tbody>{report.files.map(result => {
-          const ref = files.find(file => file.id === result.file_id_ref);
-          return <tr className="border-t border-zinc-800" key={result.id}>
-            <td className="p-2 font-mono">{ref?.path}</td><td>{result.char_accuracy}%</td>
-            <td>{result.correct_path ? 'Correct' : 'Wrong'}</td>
-            <td>{(result.mistakes_json || []).join(', ') || '—'}</td>
-          </tr>;
-        })}</tbody>
-      </table>
-    </div>
-    <button className="btn mt-5" onClick={() => { setSession(null); setProject(null); setReport(null); setMessage(''); }}>Back to library</button>
-  </main>;
+  if (preview && mode === 'lld') {
+    return <main className="mx-auto max-w-6xl p-6">
+      <button className="mb-5 text-sm text-zinc-400" onClick={() => setPreview(null)}>← Back to LLD library</button>
+      <div className="card">
+        <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
+          <span>{preview.difficulty}</span><span>•</span><span>{preview.estimated_minutes} min</span>
+        </div>
+        <h1 className="mt-3 text-4xl font-black">{preview.title}</h1>
+        <p className="mt-4 max-w-3xl leading-7 text-zinc-300">{preview.description}</p>
+      </div>
+
+      <section className="mt-6">
+        <h2 className="text-xl font-bold">Class plan</h2>
+        <p className="mt-1 text-sm text-zinc-500">Study the classes and pattern focus before the timer starts.</p>
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          {preview.lld_classes.map(item => <div className="card" key={item.id}>
+            <div className="text-xs uppercase tracking-wider text-zinc-500">{item.pattern_tag}</div>
+            <div className="mt-2 text-xl font-bold">{item.name}</div>
+            <div className="mt-3 text-sm text-zinc-400">Reference unit #{item.order_index}</div>
+          </div>)}
+        </div>
+      </section>
+
+      <button className="btn mt-6" onClick={() => start(preview)}>Start timed LLD session</button>
+      {message && <div className="card mt-5 text-sm">{message}</div>}
+    </main>;
+  }
+
+  if (report) {
+    const isLld = project?.category === 'lld';
+    return <main className="mx-auto max-w-6xl p-6">
+      <p className="text-sm uppercase tracking-[0.2em] text-zinc-500">{isLld ? 'LLD evaluation' : 'Evaluation report'}</p>
+      <h1 className="mt-2 text-4xl font-black">{project?.title}</h1>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-4">
+        {[
+          ['Accuracy', report.overall_accuracy + '%'],
+          ['Completion', report.completion_pct + '%'],
+          [isLld ? 'Class structure' : 'Structure', report.structure_score + '%'],
+          ['Time', report.time_used_seconds + 's']
+        ].map(([label,value]) =>
+          <div className="card" key={label}>
+            <div className="text-xs uppercase text-zinc-500">{label}</div>
+            <div className="mt-2 text-3xl font-black">{value}</div>
+          </div>
+        )}
+      </div>
+
+      <div className="card mt-6">
+        <b>Summary</b>
+        <p className="mt-2 text-zinc-300">{report.summary_text}</p>
+      </div>
+
+      <div className="card mt-6 overflow-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="text-zinc-500">
+              <th className="p-2">{isLld ? 'Class' : 'File'}</th>
+              {isLld && <th>Pattern</th>}
+              <th>Accuracy</th>
+              {!isLld && <th>Path</th>}
+              <th>Mistakes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.files.map(result => {
+              const ref = units.find(unit => unit.id === result.file_id_ref);
+              return <tr className="border-t border-zinc-800" key={result.id}>
+                <td className="p-2 font-mono">{ref?.name || ref?.path}</td>
+                {isLld && <td>{ref?.pattern_tag || 'none'}</td>}
+                <td>{result.char_accuracy}%</td>
+                {!isLld && <td>{result.correct_path ? 'Correct' : 'Wrong'}</td>}
+                <td>{(result.mistakes_json || []).filter(x => !String(x).startsWith('pattern:')).join(', ') || '—'}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <button className="btn mt-5" onClick={() => {
+        setSession(null); setProject(null); setReport(null); setMessage('');
+      }}>Back to library</button>
+    </main>;
+  }
 
   return <main className="mx-auto max-w-7xl p-6">
     <header className="mb-8">
-      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">Phase 1</p>
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-zinc-500">Phase 2</p>
       <h1 className="mt-2 text-4xl font-black">InterviewDrill</h1>
-      <div className="mt-5 flex gap-2">
-        <button className={`rounded-xl px-4 py-2 ${mode === 'snippet' ? 'bg-white text-black' : 'border border-zinc-700'}`} onClick={() => { setMode('snippet'); setSession(null); }}>Snippet Drills</button>
-        <button className={`rounded-xl px-4 py-2 ${mode === 'machine_coding' ? 'bg-white text-black' : 'border border-zinc-700'}`} onClick={() => { setMode('machine_coding'); setSession(null); }}>Machine Coding</button>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {Object.entries(modeTitle).map(([key,label]) =>
+          <button
+            key={key}
+            className={`rounded-xl px-4 py-2 ${mode === key ? 'bg-white text-black' : 'border border-zinc-700'}`}
+            onClick={() => setMode(key)}
+          >{label}</button>
+        )}
       </div>
     </header>
 
     {!session && <section>
+      <h2 className="mb-4 text-xl font-bold">{modeTitle[mode]}</h2>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {projects.map(item => <article className="card" key={item.id}>
           <div className="mb-3 text-xs text-zinc-400">{item.difficulty} • {item.estimated_minutes} min</div>
           <h3 className="text-xl font-bold">{item.title}</h3>
-          <div className="mt-3 flex flex-wrap gap-2">{item.tags.map(tag => <span className="rounded-full bg-zinc-800 px-2 py-1 text-xs" key={tag}>{tag}</span>)}</div>
-          <button className="btn mt-5" onClick={() => start(item)}>Start</button>
+          {item.description && <p className="mt-2 line-clamp-3 text-sm text-zinc-400">{item.description}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {item.tags.map(tag => <span className="rounded-full bg-zinc-800 px-2 py-1 text-xs" key={tag}>{tag}</span>)}
+          </div>
+          <button className="btn mt-5" onClick={() => openProject(item)}>
+            {mode === 'lld' ? 'View problem' : 'Start'}
+          </button>
         </article>)}
       </div>
     </section>}
@@ -155,23 +265,58 @@ export default function App() {
         <b>Target structure</b>
         <pre className="mt-3 text-sm text-zinc-400">{project?.files?.map(file => file.path).join('\n')}</pre>
       </div>}
-      <div className="mb-4 flex items-center justify-between">
-        <div><p className="text-sm text-zinc-500">{project?.title}</p><h2 className="text-xl font-bold">{active.path}</h2></div>
+
+      {mode === 'lld' && <div className="card mb-4">
+        <b>{project?.title}</b>
+        <p className="mt-2 text-sm text-zinc-400">{project?.description}</p>
+      </div>}
+
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm text-zinc-500">{active.unit_type === 'class' ? active.pattern_tag : project?.title}</p>
+          <h2 className="text-xl font-bold">{active.name || active.path}</h2>
+        </div>
         <div className="rounded-xl border border-zinc-800 px-4 py-2 font-mono text-xl">{formatTime(left)}</div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <aside className="card h-fit">
-          <b>Files</b>
+          <b>{mode === 'lld' ? 'Classes' : 'Files'}</b>
           <div className="mt-3 space-y-2">
-            {files.map(file => <button className="block w-full rounded-lg bg-zinc-950 p-2 text-left text-xs" key={file.id} onClick={() => setActiveId(file.id)}>{file.path}</button>)}
+            {units.map(unit => <button
+              className={`block w-full rounded-lg p-2 text-left text-xs ${active.id === unit.id ? 'bg-zinc-700' : 'bg-zinc-950'}`}
+              key={unit.id}
+              onClick={() => setActiveId(unit.id)}
+            >
+              <div>{unit.name || unit.path}</div>
+              {unit.pattern_tag && <div className="mt-1 text-zinc-500">{unit.pattern_tag}</div>}
+            </button>)}
           </div>
         </aside>
+
         <div>
-          {mode === 'machine_coding' && <input className="mb-3 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 font-mono text-sm" placeholder="Type the file path from memory" value={paths[active.id] || ''} onChange={e => setPaths({ ...paths, [active.id]: e.target.value })}/>}
+          {mode === 'machine_coding' && <input
+            className="mb-3 w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 font-mono text-sm"
+            placeholder="Type the file path from memory"
+            value={paths[active.id] || ''}
+            onChange={e => setPaths({ ...paths, [active.id]: e.target.value })}
+          />}
+
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="card"><div className="mb-3 text-sm font-semibold text-zinc-400">Reference</div><pre className="max-h-[520px] overflow-auto whitespace-pre-wrap font-mono text-xs">{active.reference_code}</pre></div>
-            <div className="card"><div className="mb-3 text-sm font-semibold text-zinc-400">Your code</div><textarea className="min-h-[520px] w-full resize-none rounded-xl bg-zinc-950 p-4 font-mono text-xs outline-none" value={typed[active.id] || ''} disabled={submitted} onChange={e => setTyped({ ...typed, [active.id]: e.target.value })} spellCheck={false}/></div>
+            <div className="card">
+              <div className="mb-3 text-sm font-semibold text-zinc-400">Reference</div>
+              <pre className="max-h-[560px] overflow-auto whitespace-pre-wrap font-mono text-xs">{active.reference_code}</pre>
+            </div>
+            <div className="card">
+              <div className="mb-3 text-sm font-semibold text-zinc-400">Your code</div>
+              <textarea
+                className="min-h-[560px] w-full resize-none rounded-xl bg-zinc-950 p-4 font-mono text-xs outline-none"
+                value={typed[active.id] || ''}
+                disabled={submitted}
+                onChange={e => setTyped({ ...typed, [active.id]: e.target.value })}
+                spellCheck={false}
+              />
+            </div>
           </div>
         </div>
       </div>

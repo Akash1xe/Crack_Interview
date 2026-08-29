@@ -1,29 +1,53 @@
 # InterviewDrill
 
-Self-hosted machine-coding and LLD interview practice platform.
+Self-hosted machine-coding and LLD interview practice platform using an Express microservices backend and a separate React/Tailwind SPA.
 
-## Current implementation
+## Implemented phases
 
-Phase 0 and Phase 1 are implemented.
+### Phase 0
+- API Gateway
+- Content Service
+- Session Service
+- isolated Content and Session Postgres databases
+- seeded snippet drill
+- end-to-end start/type/submit flow
 
-### Services
+### Phase 1
+- Redis Streams
+- Evaluation Service + isolated Evaluation Postgres
+- `session.submitted` → async evaluation → `evaluation.completed`
+- Levenshtein character accuracy
+- completion and path-structure scoring
+- mistake tags
+- beginner/intermediate machine-coding projects
+- async report polling through Gateway
 
-- API Gateway — http://localhost:4000
-- Content Service — http://localhost:4001
-- Session Service — http://localhost:4002
-- Evaluation Service — http://localhost:4003
-- Frontend — http://localhost:5173
+### Phase 2
+- `LldClass` migration and CRUD API
+- generic class/file session units
+- Parking Lot, LRU Cache, Rate Limiter, Elevator System seeds
+- C++ class-by-class typing
+- pre-session problem statement + class-plan view
+- pattern tags and pattern-aware evaluation summary
 
-### Infrastructure
+## Service ports
 
-- Content Postgres — localhost:5433
-- Session Postgres — localhost:5434
-- Evaluation Postgres — localhost:5435
-- Redis Streams — localhost:6379
+- Gateway: http://localhost:4000
+- Content Service: http://localhost:4001
+- Session Service: http://localhost:4002
+- Evaluation Service: http://localhost:4003
+- Frontend: http://localhost:5173
 
-The frontend talks only to the Gateway. Each service owns its database. Cross-service reads use REST; asynchronous evaluation uses Redis Streams.
+## Infrastructure
 
-## Run locally
+- Content Postgres: localhost:5433
+- Session Postgres: localhost:5434
+- Evaluation Postgres: localhost:5435
+- Redis: localhost:6379
+
+The architectural boundary is strict: no service queries another service's database. Cross-service reads use REST and async reactions use Redis Streams.
+
+## Run
 
 ```bash
 docker compose up --build
@@ -31,26 +55,9 @@ docker compose up --build
 
 Open http://localhost:5173.
 
-The development bearer token is `dev-token`; the SPA sends it automatically.
+The development Gateway token is `dev-token`, sent automatically by the SPA.
 
-## Seed content
-
-- Express Error Handler Drill
-- Task API — beginner machine coding
-- Authenticated Notes API — intermediate machine coding
-
-## Async evaluation flow
-
-1. Session Service commits a submitted session.
-2. Session Service emits `session.submitted` to Redis Streams.
-3. Evaluation Service consumes the event.
-4. Evaluation Service fetches Session and Content data over REST.
-5. Evaluation Service computes character accuracy, completion, path structure, and mistake tags.
-6. Evaluation Service writes its own Report/FileResult rows.
-7. Evaluation Service emits `evaluation.completed`.
-8. The frontend polls the Gateway for the report.
-
-## Reset local data
+## Reset all local data
 
 ```bash
 docker compose down -v
