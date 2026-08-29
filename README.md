@@ -1,124 +1,131 @@
-# InterviewDrill
+# InterviewDrill — Next.js Vercel Edition
 
-Self-hosted machine-coding and LLD interview practice platform with an Express microservices backend and React/Tailwind SPA.
+InterviewDrill is a full-stack machine-coding and LLD interview practice platform rebuilt as a **single Next.js application** so it can be deployed on Vercel without running six separate backend services.
 
-## Architecture
+## Stack
 
-The frontend talks only to the API Gateway. Every stateful service owns its own Postgres database. No service queries another service's database. Cross-service reads use REST and async reactions use Redis Streams.
+- Next.js App Router
+- React
+- Tailwind CSS
+- Monaco Editor
+- Neon serverless Postgres
+- JWT-style signed HTTP-only session cookie with `jose`
+- Recharts for progress trends
 
-Services:
-- Gateway — authentication, JWT verification, rate limiting, routing
-- Content Service — projects, files, folder trees, LLD classes
-- Session Service — session lifecycle, timer state, recall settings, reference snapshot
-- Evaluation Service — Levenshtein accuracy, completion, structure scoring, mistake classification
-- Progress Service — rolling WPM/accuracy, dashboard history, mistake patterns
-- Admin Service — manual creation and ZIP import through Content Service REST
+There is **no Redis, Docker, message queue, private service, or separate backend deployment** in this edition. Evaluation and progress updates happen synchronously inside Next.js route handlers.
 
-Async pipeline:
-
-`session.submitted → Evaluation Service → evaluation.completed → Progress Service`
-
-## Features implemented
+## Features
 
 - Snippet Drills
 - Machine Coding Rounds
-- LLD Practice in C++
-- Admin manual entry
+- LLD Practice
+- Admin / Content Management
+- real-time Monaco diffing
+- live WPM and character accuracy
+- countdown timer
+- automatic timeout submission
+- machine-coding path / structure scoring
+- completion scoring
+- Levenshtein-based evaluation
+- mistake-pattern classification
+- progress dashboard
+- Focus Drill suggestions
+- Recall mode with configurable preview
+- C++ LLD problems and pattern tags
 - ZIP project import
-- countdown sessions
-- async evaluation reports
-- character-level Levenshtein accuracy
-- structure and completion scoring
-- rolling WPM/accuracy
-- mistake pattern logging
-- Focus Drill recommendations
-- Recall mode with configurable 5–60 second preview
-- JWT access tokens (15 minutes)
-- HTTP-only refresh cookie (7 days)
-- automatic frontend token refresh
-- Gateway and session rate limiting
-- incremental Postgres migrations
-- unit tests for JWT token type handling and diff/scoring logic
+- durable sessions/results in Postgres
+- single-user login
+- Admin PIN protection
 
-## Local ports
+## Seed content
 
-- Gateway: 4000
-- Content: 4001
-- Session: 4002
-- Evaluation: 4003
-- Progress: 4004
-- Admin: 4005
-- Frontend: 5173
-- Content Postgres: 5433
-- Session Postgres: 5434
-- Evaluation Postgres: 5435
-- Progress Postgres: 5436
-- Redis: 6379
+### Snippets
+- Express Error Handler
+- Mongo Update Query
+- Async Controller
 
-## Configure
+### Machine Coding
+- URL Shortener API
+- Rate Limiter Service
+- Cart & Order Service
 
-Copy the example environment file:
+### LLD
+- Parking Lot System
+- LRU Cache
+- Rate Limiter
+- Elevator System
+
+## Local setup
+
+Install Node.js 20+.
 
 ```bash
-cp .env.example .env
+npm install
 ```
 
-On Windows PowerShell:
+Copy environment variables:
+
+```bash
+cp .env.example .env.local
+```
+
+PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.example .env.local
 ```
 
-Change at least:
-- `AUTH_PASSWORD`
-- `JWT_ACCESS_SECRET`
-- `JWT_REFRESH_SECRET`
-- `ADMIN_PIN`
-
-## Run
+Set a Neon Postgres connection string in `DATABASE_URL`, then:
 
 ```bash
-docker compose up --build
+npm run dev
 ```
 
-Open http://localhost:5173 and sign in with `AUTH_USERNAME` / `AUTH_PASSWORD`.
+Open http://localhost:3000.
+
+The database schema and seed content are created automatically on the first database-backed request.
+
+## Deploy for free
+
+The app itself can be deployed on the **Vercel Hobby plan**. Persistence uses a **free Neon Postgres** database.
+
+### 1. Create free Neon database
+
+Create a Neon project and copy its pooled/serverless Postgres connection string.
+
+### 2. Import this repository into Vercel
+
+Repository:
+
+`Akash1xe/Crack_Interview`
+
+Framework preset should be detected automatically as Next.js.
+
+### 3. Add Vercel environment variables
+
+```text
+DATABASE_URL=<your Neon connection string>
+AUTH_USERNAME=akash
+AUTH_PASSWORD=<your login password>
+SESSION_SECRET=<long random secret>
+ADMIN_PIN=<your admin pin>
+```
+
+Add them for Production, Preview, and Development if you want the same configuration everywhere.
+
+### 4. Deploy
+
+Click **Deploy**. No Docker, Redis, or additional Vercel services are required.
+
+On the first visit after deployment, the first API request creates the tables and seed content in Neon automatically.
 
 ## Tests
 
-Gateway auth tests:
-
 ```bash
-cd services/gateway
-npm install
 npm test
+npm run build
 ```
 
-Evaluation scoring tests:
+## Important deployment note
 
-```bash
-cd services/evaluation-service
-npm install
-npm test
-```
-
-## Reset all local state
-
-```bash
-docker compose down -v
-docker compose up --build
-```
-
-## Current status
-
-Master build phases 0 through 4 are implemented. Runtime/container verification should still be performed on a machine with Docker and internet access for initial image/package downloads.
-
-
-## Publish on Render
-
-A production Render Blueprint is included in `render.yaml`.
-
-[Deploy to Render](https://render.com/deploy?repo=https://github.com/Akash1xe/Crack_Interview)
-
-**Cost warning:** the strict microservice architecture uses private services and four independent Postgres databases. Render's free tier does not cover private services and allows only one active free Postgres database per workspace, so the Blueprint contains paid resources. Review the estimated monthly cost in Render before approving deployment.
-
-See `DEPLOYMENT.md` for the publishing steps.
+Vercel Hobby and Neon free plans have usage limits. For a personal interview-practice application, this architecture is intentionally designed to fit those free tiers much better than the previous microservice version.

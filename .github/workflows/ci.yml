@@ -1,4 +1,4 @@
-name: InterviewDrill CI
+name: Next.js CI
 
 on:
   push:
@@ -8,67 +8,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  unit-and-build:
+  test-build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - dir: frontend
-            command: npm run build
-          - dir: services/gateway
-            command: npm test
-          - dir: services/evaluation-service
-            command: npm test
-          - dir: services/content-service
-            command: node --check src/index.js && node --check src/seed.js && node --check src/seed-lld.js
-          - dir: services/session-service
-            command: node --check src/index.js
-          - dir: services/progress-service
-            command: node --check src/index.js
-          - dir: services/admin-service
-            command: node --check src/index.js
-
-    defaults:
-      run:
-        working-directory: ${{ matrix.dir }}
-
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
       - run: npm install
-      - run: ${{ matrix.command }}
-
-  compose-smoke:
-    runs-on: ubuntu-latest
-    needs: unit-and-build
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Validate Compose
-        run: docker compose config
-
-      - name: Build and start stack
-        run: docker compose up -d --build
-
-      - name: Wait for stack and run smoke test
-        run: node scripts/smoke-test.mjs
-
-      - name: Show container status
-        if: always()
-        run: docker compose ps
-
-      - name: Show logs on failure
-        if: failure()
-        run: docker compose logs --no-color --tail=250
-
-      - name: Stop stack
-        if: always()
-        run: docker compose down -v
+      - run: npm test
+      - run: npm run build
+        env:
+          SESSION_SECRET: ci-session-secret
+          AUTH_USERNAME: akash
+          AUTH_PASSWORD: ci-password
+          ADMIN_PIN: "2468"
