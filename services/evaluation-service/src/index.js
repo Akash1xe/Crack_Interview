@@ -5,8 +5,10 @@ import { scoreText, classifyMistakes } from './diff.js';
 
 const app=express();
 const port=Number(process.env.PORT||4003);
-const sessionUrl=process.env.SESSION_SERVICE_URL||'http://localhost:4002';
-const contentUrl=process.env.CONTENT_SERVICE_URL||'http://localhost:4001';
+const rawSessionUrl=process.env.SESSION_SERVICE_URL||'localhost:4002';
+const sessionUrl=/^https?:\/\//i.test(rawSessionUrl)?rawSessionUrl:`http://${rawSessionUrl}`;
+const rawContentUrl=process.env.CONTENT_SERVICE_URL||'localhost:4001';
+const contentUrl=/^https?:\/\//i.test(rawContentUrl)?rawContentUrl:`http://${rawContentUrl}`;
 const redis=createClient({url:process.env.REDIS_URL||'redis://localhost:6379'});
 redis.on('error',error=>console.error('Redis error',error));
 await redis.connect();

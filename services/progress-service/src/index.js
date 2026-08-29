@@ -4,8 +4,10 @@ import { pool } from './db.js';
 
 const app=express();
 const port=Number(process.env.PORT||4004);
-const sessionUrl=process.env.SESSION_SERVICE_URL||'http://localhost:4002';
-const evaluationUrl=process.env.EVALUATION_SERVICE_URL||'http://localhost:4003';
+const rawSessionUrl=process.env.SESSION_SERVICE_URL||'localhost:4002';
+const sessionUrl=/^https?:\/\//i.test(rawSessionUrl)?rawSessionUrl:`http://${rawSessionUrl}`;
+const rawEvaluationUrl=process.env.EVALUATION_SERVICE_URL||'localhost:4003';
+const evaluationUrl=/^https?:\/\//i.test(rawEvaluationUrl)?rawEvaluationUrl:`http://${rawEvaluationUrl}`;
 const redis=createClient({url:process.env.REDIS_URL||'redis://localhost:6379'});
 redis.on('error',error=>console.error('Redis error',error));
 await redis.connect();

@@ -4,7 +4,8 @@ import { pool } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4002);
-const contentUrl = process.env.CONTENT_SERVICE_URL || 'http://localhost:4001';
+const rawContentUrl=process.env.CONTENT_SERVICE_URL||'localhost:4001';
+const contentUrl=/^https?:\/\//i.test(rawContentUrl)?rawContentUrl:`http://${rawContentUrl}`;
 const redis = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
 redis.on('error', error => console.error('Redis error', error));
 await redis.connect();

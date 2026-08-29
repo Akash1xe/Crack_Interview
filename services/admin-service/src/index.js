@@ -4,7 +4,8 @@ import AdmZip from 'adm-zip';
 
 const app=express();
 const port=Number(process.env.PORT||4005);
-const contentUrl=process.env.CONTENT_SERVICE_URL||'http://localhost:4001';
+const rawContentUrl=process.env.CONTENT_SERVICE_URL||'localhost:4001';
+const contentUrl=/^https?:\/\//i.test(rawContentUrl)?rawContentUrl:`http://${rawContentUrl}`;
 const adminPin=process.env.ADMIN_PIN||'2468';
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:5*1024*1024}});
 

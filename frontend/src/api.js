@@ -1,4 +1,6 @@
-const base=import.meta.env.VITE_GATEWAY_URL||'http://localhost:4000/api';
+const configured=import.meta.env.VITE_GATEWAY_URL||'http://localhost:4000/api';
+const origin=/^https?:\/\//i.test(configured)?configured:`https://${configured}`;
+const base=origin.endsWith('/api')?origin:origin.replace(/\/$/,'')+'/api';
 let accessToken=sessionStorage.getItem('interviewdrill_access')||'';
 
 function storeToken(token){
@@ -18,10 +20,7 @@ async function raw(path,options={}){
 }
 
 export async function login(username,password){
-  const response=await raw('/auth/login',{
-    method:'POST',
-    body:JSON.stringify({username,password})
-  });
+  const response=await raw('/auth/login',{method:'POST',body:JSON.stringify({username,password})});
   const body=await response.json();
   if(!response.ok)throw new Error(body.error||'Login failed');
   storeToken(body.data.access_token);
@@ -31,10 +30,7 @@ export async function login(username,password){
 export async function refreshAuth(){
   const response=await fetch(base+'/auth/refresh',{method:'POST',credentials:'include'});
   const body=await response.json();
-  if(!response.ok){
-    storeToken('');
-    throw new Error(body.error||'Session expired');
-  }
+  if(!response.ok){storeToken('');throw new Error(body.error||'Session expired');}
   storeToken(body.data.access_token);
   return body.data.user;
 }
@@ -51,12 +47,7 @@ export async function bootstrapAuth(){
 export async function api(path,options={},retry=true){
   let response=await raw(path,options);
   if(response.status===401&&retry&&!path.startsWith('/auth/')){
-    try{
-      await refreshAuth();
-      response=await raw(path,options);
-    }catch{
-      storeToken('');
-    }
+    try{await refreshAuth();response=await raw(path,options);}catch{storeToken('');}
   }
   const body=await response.json();
   if(!response.ok)throw new Error(body.error||'Request failed');

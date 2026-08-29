@@ -111,3 +111,14 @@ docker compose up --build
 ## Current status
 
 Master build phases 0 through 4 are implemented. Runtime/container verification should still be performed on a machine with Docker and internet access for initial image/package downloads.
+
+
+## Publish on Render
+
+A production Render Blueprint is included in `render.yaml`.
+
+[Deploy to Render](https://render.com/deploy?repo=https://github.com/Akash1xe/Crack_Interview)
+
+**Cost warning:** the strict microservice architecture uses private services and four independent Postgres databases. Render's free tier does not cover private services and allows only one active free Postgres database per workspace, so the Blueprint contains paid resources. Review the estimated monthly cost in Render before approving deployment.
+
+See `DEPLOYMENT.md` for the publishing steps.

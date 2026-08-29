@@ -1,0 +1,188 @@
+services:
+  - type: web
+    runtime: static
+    name: interviewdrill-frontend
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: false
+    envVars:
+      - key: VITE_GATEWAY_URL
+        fromService:
+          type: web
+          name: interviewdrill-gateway
+          property: host
+
+  - type: web
+    runtime: docker
+    name: interviewdrill-gateway
+    rootDir: services/gateway
+    plan: free
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_USERNAME
+        value: akash
+      - key: AUTH_PASSWORD
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        fromService:
+          type: web
+          name: interviewdrill-frontend
+          property: host
+      - key: CONTENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-content
+          property: hostport
+      - key: SESSION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-session
+          property: hostport
+      - key: EVALUATION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-evaluation
+          property: hostport
+      - key: PROGRESS_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-progress
+          property: hostport
+      - key: ADMIN_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-admin
+          property: hostport
+
+  - type: pserv
+    runtime: docker
+    name: interviewdrill-content
+    rootDir: services/content-service
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: interviewdrill-content-db
+          property: connectionString
+
+  - type: pserv
+    runtime: docker
+    name: interviewdrill-session
+    rootDir: services/session-service
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: interviewdrill-session-db
+          property: connectionString
+      - key: CONTENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-content
+          property: hostport
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: interviewdrill-redis
+          property: connectionString
+
+  - type: pserv
+    runtime: docker
+    name: interviewdrill-evaluation
+    rootDir: services/evaluation-service
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: interviewdrill-evaluation-db
+          property: connectionString
+      - key: SESSION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-session
+          property: hostport
+      - key: CONTENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-content
+          property: hostport
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: interviewdrill-redis
+          property: connectionString
+
+  - type: pserv
+    runtime: docker
+    name: interviewdrill-progress
+    rootDir: services/progress-service
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: interviewdrill-progress-db
+          property: connectionString
+      - key: SESSION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-session
+          property: hostport
+      - key: EVALUATION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-evaluation
+          property: hostport
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: interviewdrill-redis
+          property: connectionString
+
+  - type: pserv
+    runtime: docker
+    name: interviewdrill-admin
+    rootDir: services/admin-service
+    plan: starter
+    autoDeploy: false
+    envVars:
+      - key: CONTENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: interviewdrill-content
+          property: hostport
+      - key: ADMIN_PIN
+        sync: false
+
+  - type: keyvalue
+    name: interviewdrill-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: interviewdrill-content-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []
+  - name: interviewdrill-session-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []
+  - name: interviewdrill-evaluation-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []
+  - name: interviewdrill-progress-db
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []

@@ -5,14 +5,23 @@ import rateLimit from 'express-rate-limit';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { issueAccess,issueRefresh,verifyAccess,verifyRefresh } from './auth.js';
 
+const asInternalUrl=(value,fallback)=>{
+  const raw=value||fallback;
+  return /^https?:\/\//i.test(raw)?raw:`http://${raw}`;
+};
+const asPublicOrigin=(value,fallback)=>{
+  const raw=value||fallback;
+  return /^https?:\/\//i.test(raw)?raw:`https://${raw}`;
+};
+
 const app=express();
 const port=Number(process.env.PORT||4000);
-const contentUrl=process.env.CONTENT_SERVICE_URL||'http://localhost:4001';
-const sessionUrl=process.env.SESSION_SERVICE_URL||'http://localhost:4002';
-const evaluationUrl=process.env.EVALUATION_SERVICE_URL||'http://localhost:4003';
-const progressUrl=process.env.PROGRESS_SERVICE_URL||'http://localhost:4004';
-const adminUrl=process.env.ADMIN_SERVICE_URL||'http://localhost:4005';
-const frontendOrigin=process.env.FRONTEND_ORIGIN||'http://localhost:5173';
+const contentUrl=asInternalUrl(process.env.CONTENT_SERVICE_URL,'localhost:4001');
+const sessionUrl=asInternalUrl(process.env.SESSION_SERVICE_URL,'localhost:4002');
+const evaluationUrl=asInternalUrl(process.env.EVALUATION_SERVICE_URL,'localhost:4003');
+const progressUrl=asInternalUrl(process.env.PROGRESS_SERVICE_URL,'localhost:4004');
+const adminUrl=asInternalUrl(process.env.ADMIN_SERVICE_URL,'localhost:4005');
+const frontendOrigin=asPublicOrigin(process.env.FRONTEND_ORIGIN,'http://localhost:5173');
 const authUsername=process.env.AUTH_USERNAME||'akash';
 const authPassword=process.env.AUTH_PASSWORD||'interviewdrill';
 
@@ -72,13 +81,9 @@ app.use('/api',(req,res,next)=>{
   }
 });
 
-app.use('/api/sessions',sessionLimiter,createProxyMiddleware({
-  target:sessionUrl,changeOrigin:true,pathRewrite:path=>'/sessions'+path
-}));
+app.use('/api/sessions',sessionLimiter,createProxyMiddleware({target:sessionUrl,changeOrigin:true,pathRewrite:path=>'/sessions'+path}));
 app.use('/api/content',createProxyMiddleware({target:contentUrl,changeOrigin:true}));
-app.use('/api/evaluations',createProxyMiddleware({
-  target:evaluationUrl,changeOrigin:true,pathRewrite:path=>'/reports'+path
-}));
+app.use('/api/evaluations',createProxyMiddleware({target:evaluationUrl,changeOrigin:true,pathRewrite:path=>'/reports'+path}));
 app.use('/api/progress',createProxyMiddleware({target:progressUrl,changeOrigin:true}));
 app.use('/api/admin',createProxyMiddleware({target:adminUrl,changeOrigin:true}));
 
