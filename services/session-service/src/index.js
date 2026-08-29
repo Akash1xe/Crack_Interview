@@ -1,11 +1,15 @@
 import express from 'express';
+import { createClient } from 'redis';
 import { pool } from './db.js';
 
 const app = express();
 const port = Number(process.env.PORT || 4002);
 const contentUrl = process.env.CONTENT_SERVICE_URL || 'http://localhost:4001';
-app.use(express.json({ limit: '4mb' }));
+const redis = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
+redis.on('error', error => console.error('Redis error', error));
+await redis.connect();
 
+app.use(express.json({ limit: '4mb' }));
 const ok = (res, data, status = 200) => res.status(status).json({ success: true, data, error: null });
 const fail = (res, status, error) => res.status(status).json({ success: false, data: null, error });
 
@@ -29,9 +33,9 @@ app.post('/sessions', async (req, res, next) => {
 
     const contentResponse = await fetch(`${contentUrl}/projects/${project_id}`);
     if (!contentResponse.ok) return fail(res, 404, 'Project not found in Content Service');
-
     const body = await contentResponse.json();
     const project = body.data;
+
     const snapshot = {
       project_id: project.id,
       title: project.title,
@@ -51,7 +55,6 @@ app.post('/sessions', async (req, res, next) => {
         [userId,project.id,project.category,time_limit_seconds,JSON.stringify(snapshot)]
       );
       const session = created.rows[0];
-
       for (const file of snapshot.files) {
         await client.query(
           `INSERT INTO session_files(session_id,file_id_ref,typed_code,typed_path)
@@ -59,7 +62,6 @@ app.post('/sessions', async (req, res, next) => {
           [session.id,file.id,file.path]
         );
       }
-
       await client.query('COMMIT');
       ok(res, await getSession(session.id), 201);
     } catch (error) {
@@ -75,7 +77,6 @@ app.get('/sessions/:id', async (req, res, next) => {
   try {
     const session = await getSession(req.params.id);
     if (!session) return fail(res, 404, 'Session not found');
-
     if (session.status === 'in_progress') {
       const expiresAt = new Date(session.started_at).getTime() + session.time_limit_seconds * 1000;
       if (Date.now() >= expiresAt) {
@@ -87,7 +88,6 @@ app.get('/sessions/:id', async (req, res, next) => {
         session.ended_at = new Date().toISOString();
       }
     }
-
     ok(res, session);
   } catch (error) { next(error); }
 });
@@ -134,6 +134,13 @@ app.post('/sessions/:id/submit', async (req, res, next) => {
     } finally {
       client.release();
     }
+
+    await redis.xAdd('session.submitted', '*', {
+      session_id: req.params.id,
+      user_id: current.user_id,
+      project_id: current.project_id,
+      category: current.category
+    });
 
     ok(res, await getSession(req.params.id));
   } catch (error) { next(error); }

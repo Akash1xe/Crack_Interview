@@ -7,31 +7,30 @@ const app = express();
 const port = Number(process.env.PORT || 4000);
 const contentUrl = process.env.CONTENT_SERVICE_URL || 'http://localhost:4001';
 const sessionUrl = process.env.SESSION_SERVICE_URL || 'http://localhost:4002';
+const evaluationUrl = process.env.EVALUATION_SERVICE_URL || 'http://localhost:4003';
 const devToken = process.env.DEV_TOKEN || 'dev-token';
 
 app.use(cors());
 app.use(rateLimit({ windowMs: 60_000, limit: 180, standardHeaders: true, legacyHeaders: false }));
-
 app.get('/health', (_req, res) => res.json({ service: 'gateway', ok: true }));
 
 app.use('/api', (req, res, next) => {
   const token = req.headers.authorization?.replace(/^Bearer\s+/i, '');
-  if (token !== devToken) {
-    return res.status(401).json({ success: false, data: null, error: 'Unauthorized' });
-  }
+  if (token !== devToken) return res.status(401).json({ success: false, data: null, error: 'Unauthorized' });
   req.headers['x-user-id'] = 'dev-user';
   next();
 });
 
-app.use('/api/content', createProxyMiddleware({
-  target: contentUrl,
-  changeOrigin: true
-}));
-
+app.use('/api/content', createProxyMiddleware({ target: contentUrl, changeOrigin: true }));
 app.use('/api/sessions', createProxyMiddleware({
   target: sessionUrl,
   changeOrigin: true,
   pathRewrite: path => '/sessions' + path
+}));
+app.use('/api/evaluations', createProxyMiddleware({
+  target: evaluationUrl,
+  changeOrigin: true,
+  pathRewrite: path => '/reports' + path
 }));
 
 app.use((err, _req, res, _next) => {
